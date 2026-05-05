@@ -13,28 +13,28 @@
         <p class="micro-label">Reorder Agent</p>
         <h1>리오더 에이전트</h1>
       </div>
-      <div class="topbar-badge">Forecast View</div>
+      <div class="topbar-badge">Weekly Reorder View</div>
     </header>
 
     <section class="hero-card">
       <div class="hero-copy">
         <p class="section-kicker">Overview</p>
-        <h2>스타일별 매출 흐름과 연말 예측을 리스트와 상세 분석으로 확인</h2>
+        <h2>스타일별 주차 예상 판매량과 추가 발주 필요 수량을 한 화면에서 확인</h2>
         <p class="hero-text">
-          전체 스타일을 한눈에 비교하고, 원하는 스타일을 클릭하면
-          아래에서 바로 피크 주차, 예상 매출, 판매량 흐름, PLC 비교,
-          예측 이유와 액션 제안까지 이어서 볼 수 있습니다.
+          각 스타일의 앞으로 팔릴 수량, 현재 재고, 추가로 더 발주해야 하는 수량을
+          가장 먼저 보여주도록 구성했습니다. 스타일 행을 클릭하면 바로 아래에서
+          주차별 예상 판매량과 권장 발주 수량까지 이어서 확인할 수 있습니다.
         </p>
       </div>
 
       <div class="hero-side">
         <div class="info-card">
-          <span class="info-label">대시보드 모드</span>
-          <span class="info-value">리스트 비교와 개별 스타일 상세 분석을 한 화면에서 확인</span>
+          <span class="info-label">핵심 질문</span>
+          <span class="info-value">앞으로 몇 장 팔릴지, 지금 몇 장이 있는지, 그래서 몇 장을 더 발주해야 하는지</span>
         </div>
         <div class="info-card">
-          <span class="info-label">화면 초점</span>
-          <span class="info-value">스타일코드, 예상 매출, 판매량, 위험도, 피크 주차, 세부 분석</span>
+          <span class="info-label">상세 확인</span>
+          <span class="info-value">주차별 예상 판매량, 재고 소진 시점, 권장 발주 수량, PLC 비중 기반 계산 이유</span>
         </div>
       </div>
     </section>
@@ -53,8 +53,16 @@
           id="styleSearchInput"
           class="style-search-input wide"
           type="search"
-          placeholder="아이템 또는 스타일코드 검색"
+          placeholder="스타일코드 또는 상품명 검색"
         />
+      </div>
+
+      <div class="selection-guide" role="note" aria-live="polite">
+        <div class="selection-guide-mark">클릭 안내</div>
+        <div class="selection-guide-copy">
+          <strong>스타일 행을 클릭하면 바로 아래에서 주차별 판매량과 추가 발주 계획이 열립니다.</strong>
+          <span>특히 현재 재고, 잔여 시즌 예상 판매량, 권장 추가 발주 수량, 다음 10주 발주 계획을 가장 먼저 확인할 수 있습니다.</span>
+        </div>
       </div>
 
       <div class="table-wrap style-table-wrap">
@@ -63,14 +71,13 @@
             <tr>
               <th>스타일코드</th>
               <th>상품명</th>
+              <th>현재 재고</th>
+              <th>이번 주 예상 판매</th>
+              <th>다음 4주 예상 판매</th>
+              <th>잔여 시즌 예상 판매</th>
+              <th>추가 발주 필요</th>
+              <th>재고 커버 종료</th>
               <th>피크 주차</th>
-              <th>예상 연매출액</th>
-              <th>예상 총판매수량</th>
-              <th>성장률</th>
-              <th>위험도</th>
-              <th>재고 소진 예상</th>
-              <th>라이프사이클</th>
-              <th>PLC 유사군</th>
             </tr>
           </thead>
           <tbody id="styleTableBody"></tbody>
@@ -88,46 +95,71 @@
         <div id="detailRiskBadge"></div>
       </div>
 
-      <div id="selectedSummary" class="selected-summary"></div>
+      <div id="reorderFocusGrid" class="reorder-focus-grid"></div>
 
       <section class="detail-block">
         <div class="panel-head compact">
           <div>
-            <p class="panel-kicker">Weekly Outlook</p>
-            <h3>이번 주 vs 다음 주</h3>
+            <p class="panel-kicker">Weekly Reorder Plan</p>
+            <h3>주차별 예상 판매량과 권장 발주 수량</h3>
           </div>
+          <p class="panel-note">앞으로 10주 기준</p>
         </div>
-        <div id="weekCompareGrid" class="detail-single"></div>
+        <div id="weeklyPlanBoard" class="weekly-plan-board"></div>
       </section>
 
-      <section class="detail-block">
-        <div class="panel-head compact">
-          <div>
-            <p class="panel-kicker">Weekly Sales Units</p>
-            <h3>주차별 판매량</h3>
+      <section class="detail-block split-grid">
+        <div class="sub-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="panel-kicker">Weekly Demand</p>
+              <h3>주차별 판매량</h3>
+            </div>
           </div>
+          <div id="weeklyUnitsChart" class="weekly-units-chart"></div>
         </div>
-        <div id="weeklyUnitsChart" class="weekly-units-chart"></div>
+
+        <div class="sub-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="panel-kicker">Weekly Outlook</p>
+              <h3>이번 주 vs 다음 주</h3>
+            </div>
+          </div>
+          <div id="weekCompareGrid" class="detail-single"></div>
+        </div>
       </section>
 
       <section class="detail-block">
         <div class="panel-head compact">
           <div>
             <p class="panel-kicker">Calculation Logic</p>
-            <h3>왜 이렇게 계산됐는지</h3>
+            <h3>왜 이렇게 계산했는지</h3>
           </div>
         </div>
         <div id="explanationCards" class="explanation-grid"></div>
       </section>
 
-      <section class="detail-block">
-        <div class="panel-head compact">
-          <div>
-            <p class="panel-kicker">Monthly Forecast</p>
-            <h3>월별 예상 매출</h3>
+      <section class="detail-block split-grid">
+        <div class="sub-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="panel-kicker">Monthly Forecast</p>
+              <h3>월별 예상 매출</h3>
+            </div>
           </div>
+          <div id="monthlyChart" class="bar-chart"></div>
         </div>
-        <div id="monthlyChart" class="bar-chart"></div>
+
+        <div class="sub-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="panel-kicker">Cumulative Curve</p>
+              <h3>주차별 누적 매출</h3>
+            </div>
+          </div>
+          <div id="cumulativeChart" class="line-chart-card"></div>
+        </div>
       </section>
 
       <section class="detail-block split-grid">
@@ -152,26 +184,6 @@
         </div>
       </section>
 
-      <section class="detail-block">
-        <div class="panel-head compact">
-          <div>
-            <p class="panel-kicker">Cumulative Curve</p>
-            <h3>주차별 누적 매출</h3>
-          </div>
-        </div>
-        <div id="cumulativeChart" class="line-chart-card"></div>
-      </section>
-
-      <section class="detail-block">
-        <div class="panel-head compact">
-          <div>
-            <p class="panel-kicker">Heatmap</p>
-            <h3>주차별 판매량 히트맵</h3>
-          </div>
-        </div>
-        <div id="heatmapWrap" class="heatmap-wrap"></div>
-      </section>
-
       <section class="detail-block split-grid">
         <div class="sub-panel">
           <div class="panel-head compact">
@@ -192,6 +204,16 @@
           </div>
           <div id="reasonCards" class="detail-single"></div>
         </div>
+      </section>
+
+      <section class="detail-block">
+        <div class="panel-head compact">
+          <div>
+            <p class="panel-kicker">Heatmap</p>
+            <h3>주차별 판매량 히트맵</h3>
+          </div>
+        </div>
+        <div id="heatmapWrap" class="heatmap-wrap"></div>
       </section>
 
       <section class="detail-block">

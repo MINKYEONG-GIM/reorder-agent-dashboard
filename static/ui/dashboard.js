@@ -1,7 +1,14 @@
 import { dashboardData } from "../data/dashboard-data.js";
-import { CUMULATIVE_WEEKS, HEAT_WEEKS, MONTH_LABELS } from "../lib/constants.js";
+import {
+  CURRENT_WEEK,
+  CUMULATIVE_WEEKS,
+  HEAT_WEEKS,
+  MONTH_LABELS,
+  REORDER_PLAN_WEEKS
+} from "../lib/constants.js";
 import {
   formatCompactBillion,
+  formatSignedPercent,
   formatUnits,
   formatWeekLabel,
   formatWeekText,
@@ -22,6 +29,121 @@ function getFilteredStyles() {
   });
 }
 
+function parseWeekNumber(value) {
+  const match = String(value || "").match(/\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+function sumRange(values, startIndex, endIndex) {
+  return values.slice(startIndex, endIndex).reduce((total, value) => total + value, 0);
+}
+
+function normalizeRisk(risk) {
+  const text = String(risk || "");
+  if (text.includes("낮")) return "낮음";
+  if (text.includes("중")) return "중간";
+  if (text.includes("높")) return "높음";
+  return text || "중간";
+}
+
+function normalizeLifecycle(value) {
+  const text = String(value || "");
+  if (text.includes("성")) return "성장";
+  if (text.includes("확")) return "확장";
+  if (text.includes("안")) return "안정";
+  if (text.includes("조")) return "조정";
+  if (text.includes("도")) return "도입";
+  return text || "-";
+}
+
+function cleanText(value) {
+  return String(value || "").replace(/\?/g, "").trim();
+}
+
+function getCurrentWeekUnits(item) {
+  return item.weeklySalesUnits[CURRENT_WEEK - 1] || 0;
+}
+
+function getNextWeekUnits(item) {
+  return item.weeklySalesUnits[CURRENT_WEEK] || 0;
+}
+
+function getNextDemandUnits(item, weeks) {
+  return sumRange(item.weeklySalesUnits, CURRENT_WEEK - 1, Math.min(item.weeklySalesUnits.length, CURRENT_WEEK - 1 + weeks));
+}
+
+function getRemainingForecastUnits(item) {
+  return sumRange(item.weeklySalesUnits, CURRENT_WEEK - 1, item.weeklySalesUnits.length);
+}
+
+function getCurrentInventoryUnits(item) {
+  const stockOutWeek = parseWeekNumber(item.stockOutWeek) || CURRENT_WEEK + 4;
+  const coverUntil = Math.min(item.weeklySalesUnits.length, stockOutWeek);
+  const baseCover = sumRange(item.weeklySalesUnits, CURRENT_WEEK - 1, coverUntil);
+  const cushion = Math.round((item.weeklySalesUnits[Math.max(CURRENT_WEEK - 1, stockOutWeek - 1)] || 0) * 0.35);
+  return baseCover + cushion;
+}
+
+function getRecommendedOrderUnits(item) {
+  const remainingForecastUnits = getRemainingForecastUnits(item);
+  const currentInventoryUnits = getCurrentInventoryUnits(item);
+  const safetyStockUnits = Math.round(getNextDemandUnits(item, 4) * 0.3);
+  return Math.max(0, remainingForecastUnits + safetyStockUnits - currentInventoryUnits);
+}
+
+function buildWeeklyPlan(item) {
+  const plans = [];
+  let inventory = getCurrentInventoryUnits(item);
+  let cumulativeDemand = 0;
+
+  for (let offset = 0; offset < REORDER_PLAN_WEEKS; offset += 1) {
+    const weekNumber = CURRENT_WEEK + offset;
+    if (weekNumber > item.weeklySalesUnits.length) break;
+
+    const demandUnits = item.weeklySalesUnits[weekNumber - 1] || 0;
+    cumulativeDemand += demandUnits;
+
+    const projectedEndingInventory = Math.max(0, inventory - demandUnits);
+    const nextTwoWeeksDemand = sumRange(
+      item.weeklySalesUnits,
+      Math.min(item.weeklySalesUnits.length, weekNumber),
+      Math.min(item.weeklySalesUnits.length, weekNumber + 2)
+    );
+    const targetReadyInventory = Math.round(nextTwoWeeksDemand * 1.1);
+    const suggestedOrderUnits = Math.max(0, targetReadyInventory - projectedEndingInventory);
+    const readyInventoryAfterOrder = projectedEndingInventory + suggestedOrderUnits;
+
+    plans.push({
+      weekNumber,
+      demandUnits,
+      cumulativeDemand,
+      projectedEndingInventory,
+      suggestedOrderUnits,
+      readyInventoryAfterOrder
+    });
+
+    inventory = readyInventoryAfterOrder;
+  }
+
+  return plans;
+}
+
+function getSummaryMetrics(item) {
+  const currentInventoryUnits = getCurrentInventoryUnits(item);
+  const next4WeeksDemandUnits = getNextDemandUnits(item, 4);
+  const remainingForecastUnits = getRemainingForecastUnits(item);
+  const recommendedOrderUnits = getRecommendedOrderUnits(item);
+  const currentWeekUnits = getCurrentWeekUnits(item);
+
+  return {
+    currentInventoryUnits,
+    next4WeeksDemandUnits,
+    remainingForecastUnits,
+    recommendedOrderUnits,
+    currentWeekUnits
+  };
+}
+
 function heatColor(value) {
   const alpha = 0.14 + (value / 100) * 0.86;
   return `rgba(10, 132, 255, ${alpha.toFixed(2)})`;
@@ -36,10 +158,11 @@ export function createDashboardRenderer(elements) {
     detailTitle,
     detailSubtitle,
     detailRiskBadge,
+    reorderFocusGrid,
+    weeklyPlanBoard,
     weekCompareGrid,
     weeklyUnitsChart,
     explanationCards,
-    selectedSummary,
     monthlyChart,
     cumulativeChart,
     priceTrendGrid,
@@ -61,7 +184,7 @@ export function createDashboardRenderer(elements) {
     if (!visibleStyles.length) {
       styleTableBody.innerHTML = `
         <tr>
-          <td colspan="10">
+          <td colspan="9">
             <div class="empty-state-text">검색 결과가 없습니다. 다른 스타일코드나 상품명으로 다시 검색해 보세요.</div>
           </td>
         </tr>
@@ -69,20 +192,24 @@ export function createDashboardRenderer(elements) {
       return;
     }
 
-    styleTableBody.innerHTML = visibleStyles.map((item) => `
-      <tr class="style-row ${item.styleCode === state.selectedStyleCode ? "active" : ""}" data-style-code="${item.styleCode}">
-        <td>${item.styleCode}</td>
-        <td class="style-name">${item.itemName}</td>
-        <td>${formatWeekLabel(item.peakWeek)}</td>
-        <td>${formatCompactBillion(item.projectedRevenue)}</td>
-        <td>${formatUnits(item.projectedUnits)}</td>
-        <td>${item.growthRate > 0 ? "+" : ""}${item.growthRate.toFixed(1)}%</td>
-        <td><span class="risk-pill ${riskClass(item.risk)}">${item.risk}</span></td>
-        <td>${formatWeekText(item.stockOutWeek)}</td>
-        <td>${item.lifecycle}</td>
-        <td>${item.plcGroup}</td>
-      </tr>
-    `).join("");
+    styleTableBody.innerHTML = visibleStyles.map((item) => {
+      const metrics = getSummaryMetrics(item);
+      const risk = normalizeRisk(item.risk);
+
+      return `
+        <tr class="style-row ${item.styleCode === state.selectedStyleCode ? "active" : ""}" data-style-code="${item.styleCode}">
+          <td>${item.styleCode}</td>
+          <td class="style-name">${cleanText(item.itemName)}</td>
+          <td>${formatUnits(metrics.currentInventoryUnits)}</td>
+          <td>${formatUnits(metrics.currentWeekUnits)}</td>
+          <td>${formatUnits(metrics.next4WeeksDemandUnits)}</td>
+          <td>${formatUnits(metrics.remainingForecastUnits)}</td>
+          <td class="emphasis-cell">${formatUnits(metrics.recommendedOrderUnits)}</td>
+          <td>${formatWeekText(item.stockOutWeek)}</td>
+          <td>${formatWeekLabel(item.peakWeek)}</td>
+        </tr>
+      `;
+    }).join("");
 
     styleTableBody.querySelectorAll(".style-row").forEach((row) => {
       row.addEventListener("click", () => {
@@ -94,43 +221,116 @@ export function createDashboardRenderer(elements) {
   }
 
   function renderDetailHeader(item) {
-    detailTitle.textContent = item.styleCode;
-    detailSubtitle.textContent = `${item.itemName} / 피크 ${formatWeekLabel(item.peakWeek)} / 예상 연매출 ${formatCompactBillion(item.projectedRevenue)}`;
-    detailRiskBadge.innerHTML = `<span class="risk-pill ${riskClass(item.risk)}">${item.risk}</span>`;
+    const metrics = getSummaryMetrics(item);
+    const risk = normalizeRisk(item.risk);
+
+    detailTitle.textContent = `${item.styleCode} · ${cleanText(item.itemName)}`;
+    detailSubtitle.textContent = `현재 재고 ${formatUnits(metrics.currentInventoryUnits)} / 잔여 시즌 예상 판매 ${formatUnits(metrics.remainingForecastUnits)} / 추가 발주 필요 ${formatUnits(metrics.recommendedOrderUnits)}`;
+    detailRiskBadge.innerHTML = `<span class="risk-pill ${riskClass(risk)}">${risk}</span>`;
   }
 
-  function renderSelectedSummary(item) {
-    const summaryItems = [
-      ["피크 주차", formatWeekLabel(item.peakWeek), "가장 큰 매출 봉우리 예상 시점"],
-      ["예상 연매출액", formatCompactBillion(item.projectedRevenue), "연말 누적 기준"],
-      ["예상 총판매수량", formatUnits(item.projectedUnits), "상품 회전 기준"],
-      ["성장률", `${item.growthRate > 0 ? "+" : ""}${item.growthRate.toFixed(1)}%`, "최근 흐름 기준"],
-      ["재고 소진 예상", formatWeekText(item.stockOutWeek), "리오더 검토 시점"],
-      ["라이프사이클", item.lifecycle, "현재 판매 단계"],
-      ["PLC 유사군", item.plcGroup, `유사도 ${item.plcSimilarity}점 / 속도지수 ${item.velocityIndex}`],
-      ["이번 주 - 다음 주", `${formatCompactBillion(item.currentWeekRevenue)} → ${formatCompactBillion(item.nextWeekRevenue)}`, "주간 매출 비교"]
+  function renderReorderFocus(item) {
+    const metrics = getSummaryMetrics(item);
+    const weeklyPlan = buildWeeklyPlan(item);
+    const firstOrderWeek = weeklyPlan.find((plan) => plan.suggestedOrderUnits > 0);
+
+    const cards = [
+      {
+        label: "현재 재고",
+        value: formatUnits(metrics.currentInventoryUnits),
+        sub: `${formatWeekText(item.stockOutWeek)}까지 커버 예상`
+      },
+      {
+        label: "잔여 시즌 예상 판매",
+        value: formatUnits(metrics.remainingForecastUnits),
+        sub: "현재 주차부터 연말까지 예상 판매량"
+      },
+      {
+        label: "추가 발주 필요",
+        value: formatUnits(metrics.recommendedOrderUnits),
+        sub: firstOrderWeek ? `${formatWeekLabel(firstOrderWeek.weekNumber)}부터 보충 필요` : "현재 재고만으로 커버 가능"
+      },
+      {
+        label: "이번 주 예상 판매",
+        value: formatUnits(metrics.currentWeekUnits),
+        sub: "가장 먼저 빠질 것으로 보는 주간 판매량"
+      },
+      {
+        label: "다음 4주 예상 판매",
+        value: formatUnits(metrics.next4WeeksDemandUnits),
+        sub: "단기 발주 판단에 가장 중요한 구간"
+      },
+      {
+        label: "피크 주차",
+        value: formatWeekLabel(item.peakWeek),
+        sub: "연중 가장 판매량이 크게 잡히는 주차"
+      }
     ];
 
-    selectedSummary.innerHTML = summaryItems.map(([label, value, sub]) => `
-      <article class="summary-card">
-        <span class="label">${label}</span>
-        <span class="value">${value}</span>
-        <span class="sub">${sub}</span>
+    reorderFocusGrid.innerHTML = cards.map((card, index) => `
+      <article class="focus-card ${index === 2 ? "focus-card-primary" : ""}">
+        <span class="label">${card.label}</span>
+        <span class="value">${card.value}</span>
+        <span class="sub">${card.sub}</span>
       </article>
     `).join("");
   }
 
+  function renderWeeklyPlan(item) {
+    const weeklyPlan = buildWeeklyPlan(item);
+
+    const hero = weeklyPlan.slice(0, 3).map((plan) => `
+      <article class="plan-mini-card">
+        <span class="label">${formatWeekLabel(plan.weekNumber)}</span>
+        <strong>${formatUnits(plan.demandUnits)} 판매 예상</strong>
+        <span class="sub">권장 발주 ${formatUnits(plan.suggestedOrderUnits)} / 판매 후 재고 ${formatUnits(plan.projectedEndingInventory)}</span>
+      </article>
+    `).join("");
+
+    const rows = weeklyPlan.map((plan) => `
+      <tr>
+        <td>${formatWeekLabel(plan.weekNumber)}</td>
+        <td>${formatUnits(plan.demandUnits)}</td>
+        <td>${formatUnits(plan.cumulativeDemand)}</td>
+        <td>${formatUnits(plan.projectedEndingInventory)}</td>
+        <td class="plan-order-cell">${formatUnits(plan.suggestedOrderUnits)}</td>
+        <td>${formatUnits(plan.readyInventoryAfterOrder)}</td>
+      </tr>
+    `).join("");
+
+    weeklyPlanBoard.innerHTML = `
+      <div class="plan-hero-row">${hero}</div>
+      <div class="table-wrap plan-table-wrap">
+        <table class="plan-table">
+          <thead>
+            <tr>
+              <th>주차</th>
+              <th>예상 판매량</th>
+              <th>누적 판매량</th>
+              <th>판매 후 재고</th>
+              <th>권장 추가 발주</th>
+              <th>발주 후 가용 재고</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
   function renderWeekComparison(item) {
-    const deltaPct = ((item.nextWeekRevenue - item.currentWeekRevenue) / item.currentWeekRevenue) * 100;
+    const currentWeekUnits = getCurrentWeekUnits(item);
+    const nextWeekUnits = getNextWeekUnits(item);
+    const deltaPct = currentWeekUnits === 0 ? 0 : ((nextWeekUnits - currentWeekUnits) / currentWeekUnits) * 100;
     const directionClass = deltaPct >= 0 ? "delta-up" : "delta-down";
-    const directionText = deltaPct >= 0 ? "상승" : "하락";
+    const directionText = deltaPct >= 0 ? "증가" : "감소";
 
     weekCompareGrid.innerHTML = `
       <article class="mini-card">
         <h4>${item.styleCode}</h4>
-        <p class="soft-copy">${item.itemName}</p>
-        <p class="soft-copy">이번 주 ${formatCompactBillion(item.currentWeekRevenue)} / 다음 주 ${formatCompactBillion(item.nextWeekRevenue)}</p>
-        <div class="delta-pill ${directionClass}">${directionText} ${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%</div>
+        <p class="soft-copy">${cleanText(item.itemName)}</p>
+        <p class="soft-copy">이번 주 ${formatUnits(currentWeekUnits)} / 다음 주 ${formatUnits(nextWeekUnits)}</p>
+        <div class="delta-pill ${directionClass}">${directionText} ${formatSignedPercent(deltaPct)}</div>
       </article>
     `;
   }
@@ -143,7 +343,7 @@ export function createDashboardRenderer(elements) {
     const innerHeight = height - margin.top - margin.bottom;
     const maxUnits = Math.max(...item.weeklySalesUnits);
     const barWidth = innerWidth / item.weeklySalesUnits.length;
-    const labelWeeks = new Set([1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 52, item.peakWeek]);
+    const labelWeeks = new Set([1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, item.peakWeek, CURRENT_WEEK]);
 
     const bars = item.weeklySalesUnits.map((value, index) => {
       const weekNo = index + 1;
@@ -154,6 +354,7 @@ export function createDashboardRenderer(elements) {
       const label = labelWeeks.has(weekNo)
         ? `<text x="${x + (barWidth / 2)}" y="${height - 14}" text-anchor="middle" class="axis-label">${formatWeekLabel(weekNo)}</text>`
         : "";
+      const currentWeekClass = weekNo === CURRENT_WEEK ? "week-bar current-week-bar" : "week-bar";
 
       return `
         <g class="week-bar-group">
@@ -163,9 +364,9 @@ export function createDashboardRenderer(elements) {
             width="${Math.max(6, barWidth - 2)}"
             height="${barHeight}"
             rx="7"
-            class="week-bar"
+            class="${currentWeekClass}"
           >
-            <title>${formatWeekLabel(weekNo)} / 판매량 ${formatUnits(value)} / PLC 비중 ${ratio.toFixed(3)}%</title>
+            <title>${formatWeekLabel(weekNo)} / 예상 판매량 ${formatUnits(value)} / PLC 비중 ${ratio.toFixed(3)}%</title>
           </rect>
           ${label}
         </g>
@@ -173,6 +374,7 @@ export function createDashboardRenderer(elements) {
     }).join("");
 
     const peakX = margin.left + (item.peakWeek - 0.5) * barWidth;
+    const currentX = margin.left + (CURRENT_WEEK - 0.5) * barWidth;
 
     weeklyUnitsChart.innerHTML = `
       <div class="weekly-chart-frame">
@@ -182,24 +384,29 @@ export function createDashboardRenderer(elements) {
               <stop offset="0%" stop-color="#7dd3fc"></stop>
               <stop offset="100%" stop-color="#0a84ff"></stop>
             </linearGradient>
+            <linearGradient id="currentWeekGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#34c759"></stop>
+              <stop offset="100%" stop-color="#16a34a"></stop>
+            </linearGradient>
           </defs>
           <line x1="${margin.left}" y1="${margin.top + innerHeight}" x2="${width - margin.right}" y2="${margin.top + innerHeight}" stroke="#cbd5e1"></line>
           <line x1="${peakX}" y1="${margin.top}" x2="${peakX}" y2="${margin.top + innerHeight}" class="peak-guide"></line>
+          <line x1="${currentX}" y1="${margin.top}" x2="${currentX}" y2="${margin.top + innerHeight}" class="current-guide"></line>
           ${bars}
         </svg>
-        <div class="weekly-chart-note">막대에 마우스를 올리면 주차별 판매량과 PLC 비중을 볼 수 있습니다.</div>
+        <div class="weekly-chart-note">막대에 마우스를 올리면 주차별 예상 판매량과 PLC 비중을 바로 볼 수 있습니다. 초록 막대는 현재 주차입니다.</div>
       </div>
     `;
   }
 
   function renderExplanation(item) {
     const explanationItems = [
-      ["1. 매칭 기준", item.explanation.basis],
-      ["2. 총량 기준", item.explanation.total],
-      ["3. 주차 분배 방식", item.explanation.distribution],
-      ["4. 피크 주차 판단", item.explanation.peak],
-      ["5. 월별 합산 결과", item.explanation.topMonth],
-      ["6. 현재 시점 해석", item.explanation.current]
+      ["스타일 매칭", cleanText(item.explanation.basis)],
+      ["총량 기준", cleanText(item.explanation.total)],
+      ["주차 배분 방식", cleanText(item.explanation.distribution)],
+      ["피크 주차 판단", cleanText(item.explanation.peak)],
+      ["월별 합산 결과", cleanText(item.explanation.topMonth)],
+      ["현재 시점 해석", cleanText(item.explanation.current)]
     ];
 
     explanationCards.innerHTML = explanationItems.map(([title, body]) => `
@@ -216,7 +423,7 @@ export function createDashboardRenderer(elements) {
       const height = Math.max(24, (value / maxRevenue) * 170);
       return `
         <div class="bar-col">
-          <div class="bar-value">${value}억</div>
+          <div class="bar-value">${value.toFixed(1)}억</div>
           <div class="bar-stack">
             <div class="bar-fill" style="height:${height}px"></div>
           </div>
@@ -237,13 +444,17 @@ export function createDashboardRenderer(elements) {
     const points = item.cumulativeRevenue.map((total, index) => {
       const x = margin.left + (index / (item.cumulativeRevenue.length - 1)) * usableWidth;
       const y = margin.top + usableHeight - (total / maxValue) * usableHeight;
-      return { x, y, week: CUMULATIVE_WEEKS[index] };
+      return { x, y, week: CUMULATIVE_WEEKS[index], total };
     });
 
     const polyline = points.map((point) => `${point.x},${point.y}`).join(" ");
     const labels = points.map((point) => `
-      <circle cx="${point.x}" cy="${point.y}" r="3.8" fill="#0a84ff"></circle>
-      <text x="${point.x}" y="${height - 10}" text-anchor="middle" class="axis-label">${formatWeekLabel(point.week)}</text>
+      <g>
+        <circle cx="${point.x}" cy="${point.y}" r="3.8" fill="#0a84ff">
+          <title>${formatWeekLabel(point.week)} / 누적 매출 ${point.total.toFixed(1)}억</title>
+        </circle>
+        <text x="${point.x}" y="${height - 10}" text-anchor="middle" class="axis-label">${formatWeekLabel(point.week)}</text>
+      </g>
     `).join("");
 
     cumulativeChart.innerHTML = `
@@ -260,7 +471,7 @@ export function createDashboardRenderer(elements) {
     priceTrendGrid.innerHTML = `
       <article class="trend-card">
         <h4>${item.styleCode}</h4>
-        <p class="soft-copy">${item.itemName}</p>
+        <p class="soft-copy">${cleanText(item.itemName)}</p>
         <p class="soft-copy">최근 평균 판매가 ${item.avgPriceSeries[item.avgPriceSeries.length - 1].toFixed(2)}만원</p>
         <div class="sparkline">
           ${item.avgPriceSeries.map((value) => `
@@ -275,8 +486,9 @@ export function createDashboardRenderer(elements) {
     const headCells = [`<div class="heat-head">주차</div>`]
       .concat(HEAT_WEEKS.map((week) => `<div class="heat-head">${formatWeekLabel(week)}</div>`))
       .join("");
+
     const valueCells = `<div class="heat-style">${item.styleCode}</div>` + item.heatmapValues
-      .map((value) => `<div class="heat-cell" title="${item.styleCode} ${value}" style="background:${heatColor(value)}"></div>`)
+      .map((value, index) => `<div class="heat-cell" title="${item.styleCode} ${formatWeekLabel(HEAT_WEEKS[index])} ${value}" style="background:${heatColor(value)}"></div>`)
       .join("");
 
     heatmapWrap.innerHTML = `<div class="heatmap">${headCells}${valueCells}</div>`;
@@ -288,27 +500,28 @@ export function createDashboardRenderer(elements) {
         <div class="compare-row">
           <div>
             <h4>${item.styleCode}</h4>
-            <p>${item.plcGroup}</p>
+            <p>${cleanText(item.plcGroup)}</p>
           </div>
           <div class="accent-number">${item.plcSimilarity}점</div>
         </div>
-        <p class="soft-copy">PLC 피크 차이 ${item.plcPeakGapWeeks > 0 ? "+" : ""}${item.plcPeakGapWeeks}주 / 속도지수 ${item.velocityIndex}</p>
+        <p class="soft-copy">PLC 피크 차이 ${item.plcPeakGapWeeks > 0 ? "+" : ""}${item.plcPeakGapWeeks}주 / 속도 지수 ${item.velocityIndex}</p>
         <div class="metric-rail"><div class="metric-fill" style="width:${item.plcSimilarity}%"></div></div>
       </article>
     `;
   }
 
   function renderLifecycle(item) {
+    const risk = normalizeRisk(item.risk);
     lifecycleGrid.innerHTML = `
       <article class="life-card">
         <div class="compare-row">
           <div>
             <h4>${item.styleCode}</h4>
-            <p>${item.itemName}</p>
+            <p>${cleanText(item.itemName)}</p>
           </div>
-          <div class="life-pill ${riskClass(item.risk)}">${item.lifecycle}</div>
+          <div class="life-pill ${riskClass(risk)}">${normalizeLifecycle(item.lifecycle)}</div>
         </div>
-        <p class="soft-copy">재고 소진 예상 ${formatWeekText(item.stockOutWeek)} / 성장률 ${item.growthRate > 0 ? "+" : ""}${item.growthRate.toFixed(1)}% / 위험도 ${item.risk}</p>
+        <p class="soft-copy">재고 커버 종료 ${formatWeekText(item.stockOutWeek)} / 성장률 ${formatSignedPercent(item.growthRate)} / 위험도 ${risk}</p>
       </article>
     `;
   }
@@ -316,19 +529,24 @@ export function createDashboardRenderer(elements) {
   function renderReasons(item) {
     reasonCards.innerHTML = `
       <article class="reason-card">
-        <h4>${formatWeekText(item.reasonTitle)}</h4>
-        <p>1. ${formatWeekText(item.reasons[0])}</p>
-        <p>2. ${formatWeekText(item.reasons[1])}</p>
-        <p>3. ${formatWeekText(item.reasons[2])}</p>
+        <h4>${formatWeekText(cleanText(item.reasonTitle))}</h4>
+        <p>1. ${formatWeekText(cleanText(item.reasons[0]))}</p>
+        <p>2. ${formatWeekText(cleanText(item.reasons[1]))}</p>
+        <p>3. ${formatWeekText(cleanText(item.reasons[2]))}</p>
       </article>
     `;
   }
 
   function renderActions(item) {
+    const firstPlan = buildWeeklyPlan(item).find((plan) => plan.suggestedOrderUnits > 0);
+    const firstPlanText = firstPlan
+      ? `${formatWeekLabel(firstPlan.weekNumber)}에 ${formatUnits(firstPlan.suggestedOrderUnits)} 발주 검토`
+      : "현재 재고만으로 단기 커버 가능";
+
     actionList.innerHTML = `
       <article class="action-item">
         <h4>${item.styleCode}</h4>
-        <p>${formatWeekText(item.action)}</p>
+        <p>${firstPlanText}. ${formatWeekText(cleanText(item.action))}</p>
       </article>
     `;
   }
@@ -344,7 +562,8 @@ export function createDashboardRenderer(elements) {
 
     detailPanel.classList.remove("hidden");
     renderDetailHeader(item);
-    renderSelectedSummary(item);
+    renderReorderFocus(item);
+    renderWeeklyPlan(item);
     renderWeekComparison(item);
     renderWeeklyUnits(item);
     renderExplanation(item);
