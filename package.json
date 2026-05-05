@@ -1,0 +1,9 @@
+{
+  "name": "style-forecast-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "powershell -ExecutionPolicy Bypass -File ./start_web.ps1",
+    "start": "powershell -ExecutionPolicy Bypass -File ./start_web.ps1"
+  }
+}

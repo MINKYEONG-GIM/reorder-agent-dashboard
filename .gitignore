@@ -1,0 +1,8 @@
+__pycache__/
+output/
+outputs/
+web_server.log
+web_server.err.log
+.vercel/
+
+.vercel
