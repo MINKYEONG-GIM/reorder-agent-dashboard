@@ -3,7 +3,7 @@ export const numberFormatter = new Intl.NumberFormat("ko-KR");
 const FORECAST_YEAR = 2026;
 
 export function formatWon(valueInWon) {
-  return `${numberFormatter.format(valueInWon)}원`;
+  return `${numberFormatter.format(Math.round(valueInWon))}원`;
 }
 
 export function formatCompactBillion(valueInWon) {
@@ -11,7 +11,11 @@ export function formatCompactBillion(valueInWon) {
 }
 
 export function formatUnits(value) {
-  return `${numberFormatter.format(value)}개`;
+  return `${numberFormatter.format(Math.round(value))}장`;
+}
+
+export function formatSignedPercent(value) {
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
 }
 
 export function riskClass(risk) {
@@ -46,5 +50,5 @@ export function formatWeekLabel(weekNumber, year = FORECAST_YEAR) {
 
 export function formatWeekText(text, year = FORECAST_YEAR) {
   if (!text) return "-";
-  return String(text).replace(/(\d+)주차/g, (_, week) => formatWeekLabel(Number(week), year));
+  return String(text).replace(/(\d+)(?:주차|二쇱감)/g, (_, week) => formatWeekLabel(Number(week), year));
 }
