@@ -11,7 +11,7 @@ import type {
 
 const PAGE_SIZE = 40;
 const SALES_CSV_PATH =
-  process.env.SALES_CSV_PATH ?? "C:/Users/kim_minkyeong07/Downloads/후아유 일자별 매출.csv";
+  process.env.SALES_CSV_PATH ?? "C:/Users/kim_minkyeong07/Downloads/후아유 주차별 매출.csv";
 const ITEM_WEEKLY_CSV_PATH =
   process.env.ITEM_WEEKLY_CSV_PATH ?? "C:/Users/kim_minkyeong07/Downloads/후아유 아이템별 주차별 판매.csv";
 const DISCOUNT_CUTOFF_PCT = 50;
@@ -100,13 +100,20 @@ function normalizeQuery(query?: string) {
   return query?.trim().toLowerCase() ?? "";
 }
 
-function getIsoWeek(dateString: string) {
-  const date = new Date(`${dateString}T00:00:00Z`);
-  const utc = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const day = utc.getUTCDay() || 7;
-  utc.setUTCDate(utc.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
-  return Math.ceil((((utc.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+function getWeekNoFromYearWeekCode(value: string) {
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length < 6) {
+    return 0;
+  }
+  return Number(digits.slice(-2));
+}
+
+function getYearFromYearWeekCode(value: string) {
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length < 6) {
+    return 0;
+  }
+  return Number(digits.slice(0, 4));
 }
 
 function getIsoWeekStartDate(year: number, weekNumber: number) {
@@ -295,7 +302,7 @@ function buildItemForecastRows() {
   const salesLines = readFileSync(SALES_CSV_PATH, "utf8").split(/\r?\n/).filter(Boolean);
   const header = parseCsvLine(salesLines[0]).map(normalizeHeader);
 
-  const dateIndex = header.indexOf("일자");
+  const weekCodeIndex = header.indexOf("주차");
   const brandIndex = header.indexOf("브랜드명");
   const yearIndex = header.indexOf("연도");
   const seasonIndex = header.indexOf("시즌");
@@ -310,7 +317,7 @@ function buildItemForecastRows() {
 
   if (
     [
-      dateIndex,
+      weekCodeIndex,
       brandIndex,
       yearIndex,
       seasonIndex,
@@ -332,14 +339,14 @@ function buildItemForecastRows() {
   for (let lineIndex = 1; lineIndex < salesLines.length; lineIndex += 1) {
     const columns = parseCsvLine(salesLines[lineIndex]);
     const styleCode = normalizeHeader(columns[styleCodeIndex] ?? "");
-    const saleDate = normalizeHeader(columns[dateIndex] ?? "");
+    const weekCode = normalizeHeader(columns[weekCodeIndex] ?? "");
 
-    if (!styleCode || !saleDate) {
+    if (!styleCode || !weekCode) {
       continue;
     }
 
-    const salesYear = toNumber(columns[yearIndex]) || Number(saleDate.slice(0, 4));
-    const weekNo = getIsoWeek(saleDate);
+    const salesYear = toNumber(columns[yearIndex]) || getYearFromYearWeekCode(weekCode);
+    const weekNo = getWeekNoFromYearWeekCode(weekCode);
     const qty = toNumber(columns[qtyIndex]);
     const revenue = toNumber(columns[revenueIndex]);
 
@@ -355,7 +362,7 @@ function buildItemForecastRows() {
       categoryMajor: normalizeHeader(columns[majorIndex] ?? ""),
       categoryMiddle: normalizeHeader(columns[middleIndex] ?? ""),
       categorySmall: normalizeHeader(columns[smallIndex] ?? ""),
-      latestSaleDate: saleDate,
+      latestSaleDate: weekCode,
       currentWeekNo: weekNo,
       weeklyActualQty: createEmptyWeekSeries(),
       weeklyActualRevenue: createEmptyWeekSeries(),
@@ -369,8 +376,8 @@ function buildItemForecastRows() {
     group.categoryMiddle ||= normalizeHeader(columns[middleIndex] ?? "");
     group.categorySmall ||= normalizeHeader(columns[smallIndex] ?? "");
 
-    if (saleDate > group.latestSaleDate) {
-      group.latestSaleDate = saleDate;
+    if (weekCode > group.latestSaleDate) {
+      group.latestSaleDate = weekCode;
       group.currentWeekNo = weekNo;
     }
 

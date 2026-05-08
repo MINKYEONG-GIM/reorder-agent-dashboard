@@ -21,7 +21,7 @@ export default async function Home({ searchParams }: HomeProps) {
           <p className="eyebrow">Who.A.U Item Weekly Basis Forecast</p>
           <h1>작년 아이템군 주차 비중과 할인 제외 기준으로 아이템별 엔딩 판매량을 예측합니다</h1>
           <p className="hero-copy">
-            이 화면은 <strong>후아유 일자별 매출.csv</strong>의 실제 판매 데이터를 기준으로,{" "}
+            이 화면은 <strong>후아유 주차별 매출.csv</strong>의 실제 판매 데이터를 기준으로,{" "}
             <strong>후아유 아이템별 주차별 판매.csv</strong>에서 읽은 작년 아이템군 주차 비중을 적용해 엔딩 판매량을 계산합니다.
             특히 <strong>할인율 50% 이상인 주차 판매량은 0으로 보고 비중 계산에서 제외</strong>합니다.
           </p>
