@@ -1,5 +1,5 @@
-import { ForecastPreview } from "@/components/forecast-preview";
-import { getDashboardPageData } from "@/lib/data";
+import { ForecastPreview } from "../components/forecast-preview";
+import { getDashboardPageData } from "../lib/data";
 
 type HomeProps = {
   searchParams?: Promise<{
@@ -18,24 +18,23 @@ export default async function Home({ searchParams }: HomeProps) {
     <main className="page-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">Who.A.U Item Weekly Basis Forecast</p>
-          <h1>작년 아이템군 주차 비중과 할인 제외 기준으로 아이템별 엔딩 판매량을 예측합니다</h1>
+          <p className="eyebrow">WHO.A.U Mock Forecast</p>
+          <h1>목업 데이터로 주차별 판매 예측 웹을 빠르게 확인합니다.</h1>
           <p className="hero-copy">
-            이 화면은 <strong>후아유 주차별 매출.csv</strong>의 실제 판매 데이터를 기준으로,{" "}
-            <strong>후아유 아이템별 주차별 판매.csv</strong>에서 읽은 작년 아이템군 주차 비중을 적용해 엔딩 판매량을 계산합니다.
-            특히 <strong>할인율 50% 이상인 주차 판매량은 0으로 보고 비중 계산에서 제외</strong>합니다.
+            실제 CSV 대신 후아유 스타일의 샘플 아이템군과 올해 판매 흐름을 생성했습니다. 할인율 50% 이상 주차를
+            제외한 주차 비중, 아이템별 연말 판매량, 남은 주차 예측량을 바로 볼 수 있습니다.
           </p>
 
           <form className="search-form" action="/" method="get">
             <label className="search-label" htmlFor="q">
-              스타일코드, 스타일명, 상품명, 아이템군 검색
+              스타일코드, 스타일명, 아이템군 검색
             </label>
             <div className="search-row">
               <input
                 id="q"
                 name="q"
                 type="text"
-                placeholder="예: WHACG1111A 또는 모자"
+                placeholder="예: hoodie, 볼캡, denim"
                 defaultValue={pageData.query}
                 className="search-input"
               />
@@ -47,12 +46,12 @@ export default async function Home({ searchParams }: HomeProps) {
         </div>
 
         <div className="hero-card">
-          <span>현재 기준</span>
-          <strong>{pageData.query || "전체 아이템"}</strong>
+          <span>목업 기준</span>
+          <strong>{pageData.ok ? `${pageData.dashboard.summary.latestSalesYear}년 샘플 판매` : "데이터 확인 필요"}</strong>
           <p>
             {pageData.ok
-              ? `${pageData.dashboard.summary.totalItems}개 아이템 / ${pageData.dashboard.summary.latestSalesYear}년 판매 기준`
-              : "CSV 파일을 읽지 못하면 여기에서 오류 안내를 보여줍니다."}
+              ? `샘플 ${pageData.dashboard.summary.totalItems}개 아이템을 기준으로 연말 판매량과 주차별 예측량을 계산했습니다.`
+              : "목업 데이터를 만들지 못했습니다."}
           </p>
         </div>
       </section>
@@ -61,8 +60,8 @@ export default async function Home({ searchParams }: HomeProps) {
         <ForecastPreview dashboard={pageData.dashboard} query={pageData.query} />
       ) : (
         <section className="panel empty-state">
-          <span className="kicker">데이터 확인</span>
-          <h2>CSV 기반 예측 데이터를 불러오지 못했습니다</h2>
+          <span className="kicker">데이터 오류</span>
+          <h2>예측용 데이터를 불러오지 못했습니다.</h2>
           <p>{pageData.message}</p>
         </section>
       )}

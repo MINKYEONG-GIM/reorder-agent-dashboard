@@ -5,54 +5,65 @@ export type Pagination = {
   totalPages: number;
 };
 
-export type WeeklyForecastCell = {
+export type WeeklyShareCell = {
   weekNo: number;
   label: string;
-  basisYear: number;
-  basisQty: number;
+  eligibleQty: number;
+  excludedQty: number;
+  ratioPct: number;
+};
+
+export type BasisProfile = {
+  scope: string;
+  label: string;
+  totalEligibleQty: number;
+  totalRawQty: number;
+  excludedQty: number;
+  excludedWeeks: number;
+  peakWeekNo: number;
+  peakWeekLabel: string;
+  weeklyShare: WeeklyShareCell[];
+};
+
+export type ItemForecastWeek = {
+  weekNo: number;
+  label: string;
+  basisRatioPct: number;
+  basisEligibleQty: number;
   excludedQty: number;
   actualQty: number;
   forecastQty: number;
   totalQty: number;
-  actualRevenue: number;
-  forecastRevenue: number;
   totalRevenue: number;
-  ratioPct: number;
   isFuture: boolean;
 };
 
 export type ItemForecastRow = {
   styleCode: string;
-  itemRefCode: string;
   brandName: string;
-  season: string;
   salesYear: number;
+  season: string;
   styleName: string;
   itemName: string;
   categoryMajor: string;
   categoryMiddle: string;
   categorySmall: string;
-  latestSaleDate: string;
+  latestSaleWeekCode: string;
   currentWeekNo: number;
   currentWeekLabel: string;
-  basisYear: number;
   basisScope: string;
   basisLabel: string;
   basisTotalEligibleQty: number;
-  basisTotalRawQty: number;
   basisExcludedQty: number;
-  basisExcludedWeeks: number;
   cumulativeActualQty: number;
   cumulativeActualRevenue: number;
   projectedEndingQty: number;
   projectedEndingRevenue: number;
   remainingForecastQty: number;
-  remainingForecastRevenue: number;
   progressPct: number;
   peakWeekNo: number;
   peakWeekLabel: string;
-  peakMonthLabel: string;
-  weeklyForecast: WeeklyForecastCell[];
+  weeklyForecast: ItemForecastWeek[];
 };
 
 export type DashboardSummary = {
@@ -61,11 +72,13 @@ export type DashboardSummary = {
   totalActualQty: number;
   totalProjectedQty: number;
   totalProjectedRevenue: number;
+  totalRemainingQty: number;
 };
 
 export type PlanningDashboard = {
   query: string;
   summary: DashboardSummary;
+  basisProfiles: BasisProfile[];
   itemRows: ItemForecastRow[];
   pagination: Pagination;
 };
