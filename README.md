@@ -1,5 +1,12 @@
 # Inventory Planning Dashboard
 
+## Included CSV Data
+
+- `data/후아유 주차별 매출.csv`
+- `data/후아유 아이템별 주차별 판매.csv`
+
+기본 실행 시 위 두 파일을 바로 읽어서 화면을 구성합니다. 다른 경로를 쓰고 싶으면 `SALES_CSV_PATH`, `ITEM_WEEKLY_CSV_PATH` 환경변수로 덮어쓸 수 있습니다.
+
 `raw_file`, `item_plc`, `center_stock`를 바탕으로 주차별 SKU 판매/입고/재고소진율을 미리보고, 시즌 종료 전 부족 수량과 발주 시점/발주량을 계산하는 Next.js 앱입니다.
 
 ## 왜 구조를 나눴는가

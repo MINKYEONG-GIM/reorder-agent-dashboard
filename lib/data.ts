@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 import type {
   DashboardPageData,
@@ -10,10 +11,11 @@ import type {
 } from "@/lib/types";
 
 const PAGE_SIZE = 40;
+const DATA_DIR = process.env.DATA_DIR ?? join(process.cwd(), "data");
 const SALES_CSV_PATH =
-  process.env.SALES_CSV_PATH ?? "C:/Users/kim_minkyeong07/Downloads/후아유 주차별 매출.csv";
+  process.env.SALES_CSV_PATH ?? join(DATA_DIR, "후아유 주차별 매출.csv");
 const ITEM_WEEKLY_CSV_PATH =
-  process.env.ITEM_WEEKLY_CSV_PATH ?? "C:/Users/kim_minkyeong07/Downloads/후아유 아이템별 주차별 판매.csv";
+  process.env.ITEM_WEEKLY_CSV_PATH ?? join(DATA_DIR, "후아유 아이템별 주차별 판매.csv");
 const DISCOUNT_CUTOFF_PCT = 50;
 
 type MutableStyleYearGroup = {
