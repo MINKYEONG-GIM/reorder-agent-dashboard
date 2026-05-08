@@ -1,9 +1,24 @@
 {
-  "name": "style-forecast-dashboard",
-  "private": true,
+  "name": "inventory-planning-dashboard",
   "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "dev": "powershell -ExecutionPolicy Bypass -File ./start_web.ps1",
-    "start": "powershell -ExecutionPolicy Bypass -File ./start_web.ps1"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
+    "next": "^15.3.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "typescript": "^5.8.3"
   }
 }

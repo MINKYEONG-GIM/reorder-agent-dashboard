@@ -1,7 +1,0 @@
-sku,product_name,category,on_hand,on_order,lead_time_days,review_period_days,service_level_z,daily_demand_d1,daily_demand_d2,daily_demand_d3,daily_demand_d4,daily_demand_d5,daily_demand_d6,daily_demand_d7,daily_demand_d8,daily_demand_d9,daily_demand_d10,daily_demand_d11,daily_demand_d12,daily_demand_d13,daily_demand_d14
-SKU-1001,Protein Bar Box,Snack,120,40,7,14,1.65,18,21,19,20,22,24,23,25,21,20,19,22,23,24
-SKU-1002,Sparkling Water 24PK,Beverage,260,0,5,10,1.28,12,13,12,14,15,16,15,17,16,15,14,15,16,17
-SKU-1003,Cold Brew Bottle,Beverage,48,24,9,14,1.65,9,8,10,11,12,11,13,12,14,13,15,14,16,15
-SKU-1004,Instant Rice Bowl,Frozen,72,0,12,14,1.96,6,7,7,8,9,8,10,11,10,12,11,13,14,13
-SKU-1005,Greek Yogurt Cup,Dairy,95,30,4,7,1.28,11,12,12,13,14,13,15,16,15,14,13,14,15,16
-SKU-1006,Pet Food Pouch,Pet,180,60,15,21,1.65,7,8,8,9,10,10,11,12,12,13,12,13,14,15
